@@ -1,6 +1,7 @@
 
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import and_, or_
 from nltk import download, word_tokenize
 from nltk.data import find
 from nltk.stem import PorterStemmer
@@ -49,16 +50,22 @@ def grep(keywords, abstract):
             papers = session.query(Paper).filter(*constraints).all()
         filter_paper = filter(lambda p: existed_in_tokens(fuzzy_match(p.abstract.lower()), keywords), papers)
     else:
-        constraints = [Paper.title.contains(x) for x in keywords]
+        keywords_list = [x for sublist in keywords for x in sublist]
+        and_groups = [and_(*[Paper.title.contains(x) for x in sublist]) for sublist in keywords_list]
+        constraints = or_(*and_groups)
         with Session() as session:
-            papers = session.query(Paper).filter(*constraints).all()
+            papers = session.query(Paper).filter(constraints).all()
         #check whether whether nltk tokenizer data is downloaded
         check_and_download_punkt()
         #tokenize the title and filter out the substring matches
         filter_paper = []
+        paper_titles = set()
         for paper in papers:
-            if all([stemmer.stem(x.lower()) in fuzzy_match(paper.title.lower()) for x in keywords]):
-                filter_paper.append(paper)
+            for keyword in keywords:
+                if all([stemmer.stem(x.lower()) in fuzzy_match(paper.title.lower()) for x in keyword]):
+                    if paper.title not in paper_titles:
+                        filter_paper.append(paper)
+                        paper_titles.add(paper.title)
     # perform customized sorthing
     papers = sorted(filter_paper, key=lambda paper: paper.year + CONFERENCES.index(paper.conference)/10, reverse=True)
     return papers
@@ -79,9 +86,18 @@ def main():
 
     if args.k:
         assert DB_PATH.exists(), f"need to build a paper database first to perform wanted queries"
-        keywords = [x.strip() for x in args.k.split(',')]
+        # this should split up everything like 'linux,kernel,exploit' into ['linux', 'kernel', 'exploit']
+        # or everything like 'linux,kernel|exploit' into [['linux' 'kernel'], ['exploit']]
+        or_keywords = [x.strip().lower() for x in args.k.split('|')]
+        keywords = []
+        for or_keyword in or_keywords:
+            and_keywords = or_keyword.split(',')
+            keywords.append(and_keywords)
+
         if keywords:
-            logger.info("Grep based on the following keywords: %s", ', '.join(keywords))
+            # flatten the list of lists and account for the use of or vs and
+            keywords_list = [x for sublist in keywords for x in sublist]
+            logger.info("Grep based on the following keywords: %s", ', '.join(keywords_list))
         else:
             logger.warning("No keyword is provided. Return all the papers.")
 
