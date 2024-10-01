@@ -66,7 +66,7 @@ def grep(keywords, abstract):
 
 def show_papers(papers):
     for paper in papers:
-        print(f"[link={paper.url}]{paper.title}[/link]")
+        print(f"[link={paper.url}]{paper}[/link]")
 
 
 def main():
