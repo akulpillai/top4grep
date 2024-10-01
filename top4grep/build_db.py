@@ -13,12 +13,16 @@ from .abstract import Abstracts
 logger = new_logger("DB")
 logger.setLevel('WARNING')
 
-CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS"]
+CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS", "ASE", "ICSE", "FSE", "ISSTA"]
 NAME_MAP = {
         "NDSS": "ndss",
         "IEEE S&P": "sp",
         "USENIX": "uss",
         "CCS": "ccs",
+        "ASE": "ase",
+        "ICSE": "icse",
+        "FSE": "fse",
+        "ISSTA": "issta"
         }
 PACKAGE_DIR = Path(__file__).resolve().parent
 DB_PATH = PACKAGE_DIR / "data" / "papers.db"
@@ -27,10 +31,13 @@ engine = sqlalchemy.create_engine(f'sqlite:///{str(DB_PATH)}')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-def save_paper(conf, year, title, authors, abstract):
+def save_paper(conf, year, title, authors, abstract, paper_html):
     logger.debug(f'Adding paper {title} with abstract {abstract[:20]}...')
     session = Session()
-    paper = Paper(conference=conf, year=year, title=title, authors=", ".join(authors), abstract=abstract)
+    ee = paper_html.find('li', {'class': 'ee'})
+    publisher_url = ee.find('a').get('href')
+    
+    paper = Paper(conference=conf, year=year, title=title, authors=", ".join(authors), abstract=abstract, url=publisher_url)
     session.add(paper)
     session.commit()
     session.close()
@@ -51,7 +58,12 @@ def get_papers(name, year, build_abstract):
     else:
         extract_abstract = build_abstract
     try:
-        r = requests.get(f"https://dblp.org/db/conf/{conf}/{conf}{year}.html")
+        if conf == "ase":
+            r = requests.get(f"https://dblp.org/db/conf/kbse/{conf}{year}.html")
+        elif conf == "fse":
+            r = requests.get(f"https://dblp.org/db/conf/sigsoft/{conf}{year}.html")
+        else:
+            r = requests.get(f"https://dblp.org/db/conf/{conf}/{conf}{year}.html")
         assert r.status_code == 200
 
         html = BeautifulSoup(r.text, 'html.parser')
@@ -65,7 +77,7 @@ def get_papers(name, year, build_abstract):
                 abstract = ''
             # insert the entry only if the paper does not exist
             if not paper_exist(name, year, title, authors, abstract):
-                save_paper(name, year, title, authors, abstract)
+                save_paper(name, year, title, authors, abstract, paper_html)
             cnt += 1
     except Exception as e:
         logger.warning(f"Failed to obtain papers at {name}-{year}")

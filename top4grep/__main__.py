@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from nltk import download, word_tokenize
 from nltk.data import find
 from nltk.stem import PorterStemmer
+from rich import print
 
 from .db import Base, Paper
 from .build_db import build_db, DB_PATH
@@ -19,7 +20,7 @@ Session = sessionmaker(bind=engine)
 logger = new_logger("Top4Grep")
 stemmer = PorterStemmer()
 
-CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS"]
+CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS", "ASE", "ICSE", "FSE", "ISSTA"]
 
 # Function to check and download 'punkt' if not already available
 def check_and_download_punkt():
@@ -65,7 +66,7 @@ def grep(keywords, abstract):
 
 def show_papers(papers):
     for paper in papers:
-        print(paper)
+        print(f"[link={paper.url}]{paper.title}[/link]")
 
 
 def main():
