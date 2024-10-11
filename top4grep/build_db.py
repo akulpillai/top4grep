@@ -13,7 +13,12 @@ from .abstract import Abstracts
 logger = new_logger("DB")
 logger.setLevel('WARNING')
 
-CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS", "ASE", "ICSE", "FSE", "ISSTA"]
+
+SECURITY_CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS"]
+SOFTWARE_CONFERENCES = ["ASE", "ICSE", "FSE", "ISSTA"]
+
+CONFERENCES = SECURITY_CONFERENCES + SOFTWARE_CONFERENCES
+
 NAME_MAP = {
         "NDSS": "ndss",
         "IEEE S&P": "sp",
@@ -85,7 +90,18 @@ def get_papers(name, year, build_abstract):
     logger.debug(f"Found {cnt} papers at {name}-{year}...")
 
 
-def build_db(build_abstract):
-    for conf in CONFERENCES:
-        for year in range(2000, datetime.now().year+1):
+def build_db(build_abstract, include_software=True, years=None):
+    if years:
+        start_year = datetime.now().year - years
+    else:
+        start_year = 2000
+
+    if include_software:
+        conferences = CONFERENCES
+    else:
+        conferences = SECURITY_CONFERENCES
+
+    for conf in conferences:
+        for year in range(start_year, datetime.now().year+1):
             get_papers(conf, year, build_abstract)
+

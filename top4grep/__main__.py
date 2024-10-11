@@ -1,7 +1,7 @@
 
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, inspect, select, func
 from nltk import download, word_tokenize
 from nltk.data import find
 from nltk.stem import PorterStemmer
@@ -22,6 +22,23 @@ logger = new_logger("Top4Grep")
 stemmer = PorterStemmer()
 
 CONFERENCES = ["NDSS", "IEEE S&P", "USENIX", "CCS", "ASE", "ICSE", "FSE", "ISSTA"]
+
+def validate_db():
+    assert DB_PATH.exists(), f"Database file does not exist at {DB_PATH}. Need to build a paper database first to perform wanted queries."
+
+
+    inspector = inspect(engine)
+    assert inspector.has_table('Paper'), "Need to build paper database."
+
+    # Check if the 'Paper' table has entries
+    with engine.connect() as connection:
+        result = connection.execute(select(func.count()).select_from(sqlalchemy.table('Paper')))
+        count = result.scalar()
+        assert count > 0, "DB was cleared, build paper database again."
+
+def del_db():
+    Base.metadata.drop_all(engine)
+    engine.dispose()
 
 # Function to check and download 'punkt' if not already available
 def check_and_download_punkt():
@@ -82,10 +99,13 @@ def main():
     parser.add_argument('-k', type=str, help="keywords to grep, separated by ','. For example, 'linux,kernel,exploit'", default='')
     parser.add_argument('--build-db', action="store_true", help="Builds the database of conference papers")
     parser.add_argument('--abstract', action="store_true", help="Involve abstract into the database's building or query (Need Chrome for building)")
+    parser.add_argument('--clear-db', action="store_true", help="Clears the database of conference papers")
+    parser.add_argument('--years', type=int, help="number of years to go back by, ex 10", default=None)
+    parser.add_argument('--exclude_software', action="store_true", help="Exclude software papers in the database")
     args = parser.parse_args()
 
     if args.k:
-        assert DB_PATH.exists(), f"need to build a paper database first to perform wanted queries"
+        validate_db()
         # this should split up everything like 'linux,kernel,exploit' into ['linux', 'kernel', 'exploit']
         # or everything like 'linux,kernel|exploit' into [['linux' 'kernel'], ['exploit']]
         or_keywords = [x.strip().lower() for x in args.k.split('|')]
@@ -107,7 +127,16 @@ def main():
         show_papers(papers)
     elif args.build_db:
         print("Building db...")
-        build_db(args.abstract)
+        include_software = not args.exclude_software
+        if args.years:
+            print(f"Going back {args.years} years")
+        if args.exclude_software:
+            print("Excluding software papers")
+
+        build_db(args.abstract, include_software, args.years)
+    elif args.clear_db:
+        print("Clearing db...")
+        del_db()
 
 
 if __name__ == "__main__":
