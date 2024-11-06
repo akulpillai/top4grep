@@ -3,14 +3,20 @@ Test: python3 -m top4grep.abstract
 """
 import re
 import requests
+from requests_html import HTMLSession
+# import fitz
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from urllib.parse import urlparse, urlunparse
+from helium import start_chrome, go_to, get_driver
+from playwright.sync_api import sync_playwright
+
 
 from .utils import new_logger
 
@@ -153,15 +159,80 @@ class AbstractCCS(BasePaperAbstract):
         # ap_list = [x.text for x in abstract_paragraphs]
         # return '\n'.join(ap_list)
 
+class AbstractFSE(BasePaperAbstract):
+    def get_abstract_from_publisher(self, url, authors):
+        logger.debug(f'URL: {url}')
+        r = requests.get(url)
+        assert r.status_code == 200
+
+        html = BeautifulSoup(r.text, 'html.parser')
+        abstract_paragraphs = html.find('section', {'id': 'abstract'})
+        return abstract_paragraphs.get_text(separator='\n')
+    
+class AbstractASE(BasePaperAbstract):
+    def get_abstract_from_publisher(self, url, authors):
+        logger.debug(f'URL: {url}')
+        # Initialize the WebDriver with Chrome options
+        driver = webdriver.Chrome()
+        driver.get(url)
+        # Parse the HTML
+        html = BeautifulSoup(driver.page_source, 'html.parser')
+        driver.quit()
+
+        # Try finding the string "Abstract:" and proceed if found
+        abstract_heading = html.find(string=re.compile("Abstract:", re.IGNORECASE))
+        
+        if not abstract_heading:
+            logger.debug('Abstract heading not found.')
+            return None
+        
+        # Find the next element and return its text if it exists
+        abstract_paragraphs = abstract_heading.find_next(recursive=False)
+        
+        if abstract_paragraphs:
+            return abstract_paragraphs.get_text(separator='\n')
+        else:
+            logger.debug('Abstract paragraph not found.')
+            return None
+    
+class AbstractICSE(BasePaperAbstract):
+    def get_abstract_from_publisher(self, url, authors):
+        logger.debug(f'URL: {url}')
+        r = requests.get(url)
+        assert r.status_code == 200
+
+        html = BeautifulSoup(r.text, 'html.parser')
+        abstract_paragraphs = html.find(string=re.compile("Abstract:")).find_next(recursive=False)
+        return abstract_paragraphs.get_text(separator='\n')
+
+class AbstractISSTA(BasePaperAbstract):
+    def get_abstract_from_publisher(self, url, authors):
+        logger.debug(f'URL: {url}')
+        r = requests.get(url)
+        assert r.status_code == 200
+
+        html = BeautifulSoup(r.text, 'html.parser')
+        abstract_paragraphs = html.find('section', {'id': 'abstract'})
+        return abstract_paragraphs.get_text(separator='\n')
+
 NDSS = AbstractNDSS()
 SP = AbstractSP()
 USENIX = AbstractUSENIX()
 CCS = AbstractCCS()
+FSE = AbstractFSE()
+ASE = AbstractASE()
+ICSE = AbstractICSE()
+ISSTA = AbstractISSTA()
+
 
 Abstracts = {'NDSS': NDSS,
              'IEEE S&P': SP,
              'USENIX': USENIX,
-             'CCS': CCS}
+             'CCS': CCS,
+             'FSE': FSE,
+             'ASE': ASE,
+             'ICSE': ICSE,
+             'ISSTA': ISSTA}
 
 if __name__ == '__main__':
     logger.setLevel('DEBUG')
@@ -170,4 +241,5 @@ if __name__ == '__main__':
     # print(SP.get_abstract_from_publisher('https://doi.org/10.1109/SP46215.2023.10179381', []))
     # print(USENIX.get_abstract_from_publisher('https://www.usenix.org/conference/usenixsecurity20/presentation/cremers', []))
     # print(CCS.get_abstract_from_publisher('https://doi.org/10.1145/3576915.3616615', []))
-    print(NDSS.get_abstract_from_publisher('https://www.ndss-symposium.org/ndss2015/i-do-not-know-what-you-visited-last-summer-protecting-users-third-party-web-tracking', []))
+    print(ASE.get_abstract_from_publisher('https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10298498&tag=1', []))
+    # print(NDSS.get_abstract_from_publisher('https://www.ndss-symposium.org/ndss2015/i-do-not-know-what-you-visited-last-summer-protecting-users-third-party-web-tracking', []))
