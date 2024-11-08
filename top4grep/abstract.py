@@ -20,6 +20,13 @@ from playwright.sync_api import sync_playwright
 
 from .utils import new_logger
 
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+}
+
 logger = new_logger('PaperAbstract')
 logger.setLevel('WARNING')
 
@@ -61,8 +68,11 @@ class AbstractNDSS(BasePaperAbstract):
             ap_list = [x.text for x in abstract_paragraphs]
             return '\n'.join(ap_list)
         else:
-            abstract_paragraphs = html.find(string=re.compile("Abstract:")).find_next(recursive=False)
-            return abstract_paragraphs.get_text(separator='\n')
+            try:
+                abstract_paragraphs = html.find(string=re.compile("Abstract:")).find_next(recursive=False)
+                return abstract_paragraphs.get_text(separator='\n')
+            except:
+                return ''
 
 
 class AbstractSP(BasePaperAbstract):
@@ -122,16 +132,37 @@ class AbstractSP(BasePaperAbstract):
         return text
     
     def get_abstract_from_publisher(self, url, _):
-        # TODO: this is super slow. Maybe not Selenium?
-        parsed_url = urlparse(url)
-        ieee_netloc = 'doi.ieeecomputersociety.org'
-        doi_netlog = 'doi.org'
-        if parsed_url.netloc == ieee_netloc:  
-            return self._get_abstract_from_computerorg(url)
-        elif parsed_url.netloc == doi_netlog:
-            return self._get_abstract_from_ieeexplore(url)
+        # # TODO: this is super slow. Maybe not Selenium?
+        # parsed_url = urlparse(url)
+        # ieee_netloc = 'doi.ieeecomputersociety.org'
+        # doi_netlog = 'doi.org'
+        # if parsed_url.netloc == ieee_netloc:  
+        #     return self._get_abstract_from_computerorg(url)
+        # elif parsed_url.netloc == doi_netlog:
+        #     return self._get_abstract_from_ieeexplore(url)
+        # else:
+        #     raise NotImplementedError
+        logger.debug(f'URL: {url}')
+        # Initialize the WebDriver with Chrome options
+        response = requests.get(url, headers=headers)
+        # Parse the HTML
+        html = BeautifulSoup(response.text, 'html.parser')
+
+        # Try finding the string "Abstract:" and proceed if found
+        abstract_heading = html.find("meta", property="og:description")
+        
+        if not abstract_heading:
+            logger.debug('Abstract not found.')
+            return ''
+        
+        # Find the next element and return its text if it exists
+        abstract_paragraphs = abstract_heading.get("content")
+        
+        if abstract_paragraphs:
+            return abstract_paragraphs
         else:
-            raise NotImplementedError
+            logger.debug('Abstract paragraph not found.')
+            return ''
 
 
 class AbstractUSENIX(BasePaperAbstract):
@@ -148,16 +179,13 @@ class AbstractUSENIX(BasePaperAbstract):
 
 class AbstractCCS(BasePaperAbstract):
     def get_abstract_from_publisher(self, url, authors):
-        # TODO: ACM library doesn't like me to crawl and will ban me when upset.
         logger.debug(f'URL: {url}')
         r = requests.get(url)
         assert r.status_code == 200
 
         html = BeautifulSoup(r.text, 'html.parser')
-        abstract_paragraphs = html.find('div', {'class': 'abstractInFull'})
+        abstract_paragraphs = html.find('section', {'id': 'abstract'})
         return abstract_paragraphs.get_text(separator='\n')
-        # ap_list = [x.text for x in abstract_paragraphs]
-        # return '\n'.join(ap_list)
 
 class AbstractFSE(BasePaperAbstract):
     def get_abstract_from_publisher(self, url, authors):
@@ -173,37 +201,49 @@ class AbstractASE(BasePaperAbstract):
     def get_abstract_from_publisher(self, url, authors):
         logger.debug(f'URL: {url}')
         # Initialize the WebDriver with Chrome options
-        driver = webdriver.Chrome()
-        driver.get(url)
+        response = requests.get(url, headers=headers)
         # Parse the HTML
-        html = BeautifulSoup(driver.page_source, 'html.parser')
-        driver.quit()
+        html = BeautifulSoup(response.text, 'html.parser')
 
         # Try finding the string "Abstract:" and proceed if found
-        abstract_heading = html.find(string=re.compile("Abstract:", re.IGNORECASE))
+        abstract_heading = html.find("meta", property="og:description")
         
         if not abstract_heading:
-            logger.debug('Abstract heading not found.')
-            return None
+            logger.debug('Abstract not found.')
+            return ""
         
         # Find the next element and return its text if it exists
-        abstract_paragraphs = abstract_heading.find_next(recursive=False)
+        abstract_paragraphs = abstract_heading.get("content")
         
         if abstract_paragraphs:
-            return abstract_paragraphs.get_text(separator='\n')
+            return abstract_paragraphs
         else:
             logger.debug('Abstract paragraph not found.')
-            return None
+            return ""
     
 class AbstractICSE(BasePaperAbstract):
     def get_abstract_from_publisher(self, url, authors):
         logger.debug(f'URL: {url}')
-        r = requests.get(url)
-        assert r.status_code == 200
+        # Initialize the WebDriver with Chrome options
+        response = requests.get(url, headers=headers)
+        # Parse the HTML
+        html = BeautifulSoup(response.text, 'html.parser')
 
-        html = BeautifulSoup(r.text, 'html.parser')
-        abstract_paragraphs = html.find(string=re.compile("Abstract:")).find_next(recursive=False)
-        return abstract_paragraphs.get_text(separator='\n')
+        # Try finding the string "Abstract:" and proceed if found
+        abstract_heading = html.find("meta", property="og:description")
+        
+        if not abstract_heading:
+            logger.debug('Abstract not found.')
+            return None
+        
+        # Find the next element and return its text if it exists
+        abstract_paragraphs = abstract_heading.get("content")
+        
+        if abstract_paragraphs:
+            return abstract_paragraphs
+        else:
+            logger.debug('Abstract paragraph not found.')
+            return None
 
 class AbstractISSTA(BasePaperAbstract):
     def get_abstract_from_publisher(self, url, authors):
@@ -241,5 +281,8 @@ if __name__ == '__main__':
     # print(SP.get_abstract_from_publisher('https://doi.org/10.1109/SP46215.2023.10179381', []))
     # print(USENIX.get_abstract_from_publisher('https://www.usenix.org/conference/usenixsecurity20/presentation/cremers', []))
     # print(CCS.get_abstract_from_publisher('https://doi.org/10.1145/3576915.3616615', []))
-    print(ASE.get_abstract_from_publisher('https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10298498&tag=1', []))
-    # print(NDSS.get_abstract_from_publisher('https://www.ndss-symposium.org/ndss2015/i-do-not-know-what-you-visited-last-summer-protecting-users-third-party-web-tracking', []))
+    # print(ASE.get_abstract_from_publisher('https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10298498', []))
+    print(NDSS.get_abstract_from_publisher('https://www.ndss-symposium.org/ndss2002/using-fluhrer-mantin-and-shamir-attack-break-wep', []))
+    # print(ISSTA.get_abstract_from_publisher('https://dl.acm.org/doi/10.1145/3597926.3598033', []))
+    # print(ICSE.get_abstract_from_publisher('https://ieeexplore.ieee.org/document/10172756', []))
+    # print(FSE.get_abstract_from_publisher('https://dl.acm.org/doi/10.1145/3663529.3663823', []))
