@@ -233,8 +233,12 @@ class AbstractICSE(BasePaperAbstract):
         abstract_heading = html.find("meta", property="og:description")
         
         if not abstract_heading:
-            logger.debug('Abstract not found.')
-            return None
+            r = requests.get(url)
+            assert r.status_code == 200
+
+            html = BeautifulSoup(r.text, 'html.parser')
+            abstract_paragraphs = html.find('section', {'id': 'abstract'})
+            return abstract_paragraphs.get_text(separator='\n')
         
         # Find the next element and return its text if it exists
         abstract_paragraphs = abstract_heading.get("content")
@@ -282,7 +286,7 @@ if __name__ == '__main__':
     # print(USENIX.get_abstract_from_publisher('https://www.usenix.org/conference/usenixsecurity20/presentation/cremers', []))
     # print(CCS.get_abstract_from_publisher('https://doi.org/10.1145/3576915.3616615', []))
     # print(ASE.get_abstract_from_publisher('https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10298498', []))
-    print(NDSS.get_abstract_from_publisher('https://www.ndss-symposium.org/ndss2002/using-fluhrer-mantin-and-shamir-attack-break-wep', []))
+    # print(NDSS.get_abstract_from_publisher('https://www.ndss-symposium.org/ndss2002/using-fluhrer-mantin-and-shamir-attack-break-wep', []))
     # print(ISSTA.get_abstract_from_publisher('https://dl.acm.org/doi/10.1145/3597926.3598033', []))
-    # print(ICSE.get_abstract_from_publisher('https://ieeexplore.ieee.org/document/10172756', []))
+    print(ICSE.get_abstract_from_publisher('https://dl.acm.org/doi/10.1145/3639478.3640023', []))
     # print(FSE.get_abstract_from_publisher('https://dl.acm.org/doi/10.1145/3663529.3663823', []))
