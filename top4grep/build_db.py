@@ -42,14 +42,16 @@ def save_paper(conf, year, title, authors, abstract, paper_html):
     ee = paper_html.find('li', {'class': 'ee'})
     publisher_url = ee.find('a').get('href')
     
-    paper = Paper(conference=conf, year=year, title=title, authors=", ".join(authors), abstract=abstract, url=publisher_url)
+    paper = Paper(conference=conf, year=year, title=title, authors=", ".join(authors), abstract=abstract, url=str(publisher_url))
     session.add(paper)
     session.commit()
     session.close()
 
-def paper_exist(conf, year, title, authors, abstract):
+def paper_exist(conf, year, title, authors, abstract, paper_html):
     session = Session()
-    paper = session.query(Paper).filter(Paper.conference==conf, Paper.year==year, Paper.title==title, Paper.abstract==abstract).first()
+    ee = paper_html.find('li', {'class': 'ee'})
+    publisher_url = ee.find('a').get('href')
+    paper = session.query(Paper).filter(Paper.conference==conf, Paper.year==year, Paper.title==title, Paper.abstract==abstract, Paper.url==publisher_url).first()
     session.close()
     return paper is not None
 
@@ -81,7 +83,7 @@ def get_papers(name, year, build_abstract):
             else:
                 abstract = ''
             # insert the entry only if the paper does not exist
-            if not paper_exist(name, year, title, authors, abstract):
+            if not paper_exist(name, year, title, authors, abstract, paper_html):
                 save_paper(name, year, title, authors, abstract, paper_html)
             cnt += 1
     except Exception as e:

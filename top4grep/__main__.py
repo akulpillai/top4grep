@@ -44,12 +44,12 @@ def del_db():
 def check_and_download_punkt():
     try:
         # Check if 'punkt' is available, this will raise a LookupError if not found
-        find('tokenizers/punkt')
+        find('tokenizers/punkt_tab')
         #print("'punkt' tokenizer models are already installed.")
     except LookupError:
         print("'punkt' tokenizer models not found. Downloading...")
         # Download 'punkt' tokenizer models
-        download('punkt')
+        download('punkt_tab')
         
 # trim word tokens from tokenizer to stem i.e. exploiting to exploit
 def fuzzy_match(title):
@@ -61,28 +61,36 @@ def existed_in_tokens(tokens, keywords):
 
 def grep(keywords, abstract):
     # TODO: currently we only grep either from title or from abstract, also grep from other fields in the future maybe?
+    keywords_list = [x for sublist in keywords for x in sublist]
+    and_groups = [and_(*[Paper.title.contains(x) for x in sublist]) for sublist in keywords_list]
+    constraints = or_(*and_groups)
+    with Session() as session:
+        papers = session.query(Paper).filter(constraints).all()
+    #check whether whether nltk tokenizer data is downloaded
+    check_and_download_punkt()
+    #tokenize the title and filter out the substring matches
+    filter_paper = []
+    paper_titles = set()
+    for paper in papers:
+        for keyword in keywords:
+            if all([stemmer.stem(x.lower()) in fuzzy_match(paper.title.lower()) for x in keyword]):
+                if paper.title not in paper_titles:
+                    filter_paper.append(paper)
+                    paper_titles.add(paper.title)
     if abstract:
-        constraints = [Paper.abstract.contains(x) for x in keywords]
-        with Session() as session:
-            papers = session.query(Paper).filter(*constraints).all()
-        filter_paper = filter(lambda p: existed_in_tokens(fuzzy_match(p.abstract.lower()), keywords), papers)
-    else:
-        keywords_list = [x for sublist in keywords for x in sublist]
-        and_groups = [and_(*[Paper.title.contains(x) for x in sublist]) for sublist in keywords_list]
+        and_groups = [and_(*[Paper.abstract.contains(x) for x in sublist]) for sublist in keywords_list]
         constraints = or_(*and_groups)
         with Session() as session:
             papers = session.query(Paper).filter(constraints).all()
         #check whether whether nltk tokenizer data is downloaded
         check_and_download_punkt()
-        #tokenize the title and filter out the substring matches
-        filter_paper = []
-        paper_titles = set()
         for paper in papers:
             for keyword in keywords:
-                if all([stemmer.stem(x.lower()) in fuzzy_match(paper.title.lower()) for x in keyword]):
+                if all([stemmer.stem(x.lower()) in fuzzy_match(paper.abstract.lower()) for x in keyword]):
                     if paper.title not in paper_titles:
                         filter_paper.append(paper)
                         paper_titles.add(paper.title)
+        
     # perform customized sorthing
     papers = sorted(filter_paper, key=lambda paper: paper.year + CONFERENCES.index(paper.conference)/10, reverse=True)
     return papers
@@ -90,7 +98,7 @@ def grep(keywords, abstract):
 
 def show_papers(papers):
     for paper in papers:
-        print(f"[link={paper.url}]{paper}[/link]")
+        print(f"[link={paper.url}]{paper}[/link] ({paper.url})")
 
 
 def main():

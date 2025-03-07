@@ -9,7 +9,7 @@ class BaseTable:
 
 Base = declarative_base(cls=BaseTable)
 
-class Paper(Base):
+class Paper(Base):    
     conference = Column(String)
     year = Column(Integer)
     title = Column(String)
